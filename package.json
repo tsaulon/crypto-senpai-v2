@@ -1,0 +1,17 @@
+{
+  "name": "crypto-botv2",
+  "version": "1.0.0",
+  "description": "Cryptocurrency discord chatbot that tracks coin market prices",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "author": "Tyrone Saulon",
+  "license": "ISC",
+  "dependencies": {
+    "coinmarketcap-api": "^2.3.2",
+    "discord.js": "^11.3.2",
+    "dotenv": "^6.0.0"
+  }
+}
