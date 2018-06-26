@@ -11,58 +11,42 @@ module.exports.Initialize = () => {
             resolve(data)
         }).then(() => {
 
-            //schedule update every 5 minutes
+            //schedule update every endpoint refresh (5min)
             isUpdating = setInterval(() => {
                 updateTop100().then(data => console.log(data)).catch(data => console.log(data));
-            }, 300000)  //(5min * 60sec * 1000).
+            }, 300000)  //(5m * 60s * 1000ms).
 
         }).catch(data => {
             reject(data)
-        }); 
+        });
     });
 }
 
-module.exports.display = (symbols) => {
-    
+function getLocalTicker(symbol) {
     return new Promise((resolve, reject) => {
 
-        var extraction = [];
+        var found = false;
+        var coin;
 
-        //find symbols requested from coins array and convert into embed message object
-        symbols.forEach(x => {
-            try{
-                coins.filter(coin => {
-                    if(coin.symbol.toLowerCase() == x){
-                        extraction.push(toDiscord(coin));
-                    }
-                });
-            } catch(e) {
-
+        coins.filter(token => {
+            if (token.symbol.toLowerCase() == symbol) {
+                coin = token;
+                found = true;
             }
-        });
+        })
 
-        //wait for extraction to populate
-        Promise.all(extraction).then(updates => {
-            resolve(updates);
-        }).catch(console.err);
-    })
-}
-
-function coinExists(symbol){
-    
-    var found = false;
-    var coin;
-
-    coins.filter(token => {
-        if(token.symbol.toLowerCase() == symbol){
-            //TODO: check existence of coin.
+        if (!found) {
+            reject(symbol);
+        } else {
+            resolve(coin);
         }
-    })
+    });
 }
 
 /*
 
 //Use for coins over top 100 that want to be displayed
+//Must still consider APi limitations
 module.exports.display = (symbols) => {
 
     return new Promise((resolve, reject) => {
@@ -71,7 +55,7 @@ module.exports.display = (symbols) => {
 
             return client.getTicker({ currency: symbol }).then(details => {
                 console.log(`Request for '${details.data.name}' succesful!`);
-                return toDiscord(details.data);
+                return toDiscordCoin(details.data);
             }).catch(data => {
                 console.log(`Request for symbol '${symbol}' has been rejected. (${data.message})`);
                 reject(`I cannot recognize the symbol '${symbol}'`);
@@ -89,8 +73,107 @@ module.exports.display = (symbols) => {
 */
 
 
-/* This function builds a string using a received coin object */
-function toDiscord(coin) {
+/***********************************************
+ *                ALERT FUNCTIONS              *
+ ***********************************************/
+
+module.exports.alert = events => {
+
+    return new Promise((resolve, reject) => {
+
+        var alertList = events.map(event => {
+            
+            var alert = {
+                coin: event.split("@").shift(),
+                price: event.split("@").pop()
+            }
+
+            return isCoin(alert.coin).then((coinObj) => {
+                if(isNaN(alert.price)){
+                    reject(`price point requested for '${event}' must be a number.`);
+                } else{
+
+                    var tmp = {
+                        coin: coinObj,
+                        price: alert.price
+                    }
+
+                    return tmp;
+                }
+            }).catch(() => {
+                reject(`symbol requested at '${event}' is not a symbol or is not a part of the top 100.`)
+            });
+
+
+        });
+
+        Promise.all(alertList).then(data =>
+
+            //TODO: Use dataset here to add to DB
+
+            resolve(toDiscordAlertConfirmation(data))
+        ).catch(data => console.log(data));
+    });
+}
+
+function isCoin(symbol){
+    
+    return new Promise((resolve, reject) => {
+        var flag = false;
+        var coinObj;
+
+        coins.forEach(x => {
+            if(x.symbol.toLowerCase() === symbol.toLowerCase()){
+                coinObj = x;
+                flag = true;
+            }
+        })
+
+        return flag ? resolve(coinObj) : reject();
+    })
+}
+
+function toDiscordAlertConfirmation(alertList){
+
+    var embed = new Discord.RichEmbed();
+
+    alertList.forEach(alert => {
+        embed.addField(`+ added ${alert.coin.name.toUpperCase()} reaches $${alert.price}`, `- current: $${alert.coin.quotes.USD.price}`);
+    })
+
+    embed.setTitle("Alerts");
+    embed.setColor("E0433C");
+    embed.setTimestamp();
+    embed.setFooter("Added");
+    return embed;
+
+}
+
+
+/*************************************************
+ *                DISPLAY FUNCTIONS              *
+ *************************************************/
+
+module.exports.display = (symbols) => {
+
+    return new Promise((resolve, reject) => {
+
+        var extraction = symbols.map(symbol => {
+
+            return getLocalTicker(symbol).then(coin => {
+
+                return toDiscordCoin(coin);
+            }).catch(symbol => reject(`'${symbol}' coin does not exist or is not part of top 100!`));
+        });
+
+        //wait for extraction to populate
+        Promise.all(extraction).then(updates => {
+            resolve(updates);
+        }).catch(console.err);
+    })
+}
+
+function toDiscordCoin(coin) {
 
     var sign_1h = getOperator(coin.quotes.USD.percent_change_1h);
     var sign_24h = getOperator(coin.quotes.USD.percent_change_24h);
@@ -102,16 +185,19 @@ function toDiscord(coin) {
     embed.setTitle(coin.name);
     embed.setDescription(
         `\`\`\`diff
-USD:          $ ${insertCommas(coin.quotes.USD.price)}
-24h Volume:   $ ${insertCommas(coin.quotes.USD.volume_24h)}
-Market Cap:   $ ${insertCommas(coin.quotes.USD.market_cap)}
+USD:        $ ${insertCommas(coin.quotes.USD.price.toFixed(2))}
+24h Volume: $ ${insertCommas(coin.quotes.USD.volume_24h)}
+Market Cap: $ ${insertCommas(coin.quotes.USD.market_cap)}
+Circulating Supply: $ ${insertCommas(coin.circulating_supply)}
+Max Supply:         $ ${coin.circulating_supply ? insertCommas(coin.circulating_supply) : "None"}
 ${sign_1h} (1h):       % ${addSpace(sign_1h)}${coin.quotes.USD.percent_change_1h.toFixed(2)}
 ${sign_24h} (24h):      % ${addSpace(sign_24h)}${coin.quotes.USD.percent_change_24h.toFixed(2)}
 ${sign_7d} (7d):       % ${addSpace(sign_7d)}${coin.quotes.USD.percent_change_7d.toFixed(2)}
+
+Currency data captured from\t\t\t"${getCoinURL(coin.name)}"
 \`\`\``);  //re-design this to pull from global variable 'options' passed to market object.
     embed.setTimestamp();
     embed.setFooter(coin.symbol, getCoinImageURL(coin.id));
-
     return embed;
 }
 
@@ -128,6 +214,10 @@ function insertCommas(x) {
     return (x > 1) ? x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",") : x;
 }
 
+function getCoinURL(name) {
+    return `https://coinmarketcap.com/currencies/${name.toLowerCase()}/`;
+}
+
 function getCoinImageURL(id) {
 
     var url;
@@ -142,7 +232,11 @@ function getCoinImageURL(id) {
     return url;
 }
 
-function updateTop100(){
+/*************************************************
+ *                 UPDATE FUNCTIONS              *
+ *************************************************/
+
+function updateTop100() {
     return new Promise((resolve, reject) => {
 
         client.getTicker().then(token => {

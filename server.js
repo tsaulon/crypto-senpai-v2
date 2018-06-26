@@ -1,4 +1,4 @@
-const token = "NDU2MzIyNDU0ODU2NDAwOTA2.DgI2_g.xvWVAkD38aJE_GeBN5GECDF6pPM";
+const token = "";
 
 const data_service = require("./data_service.js");
 const Discord = require("discord.js");
@@ -22,9 +22,9 @@ client.on("message", msg => {
     switch(action){
         case "display":
             data_service.display(args).then(dataArray => {
-                dataArray.forEach(element => {
+                dataArray.forEach(embed => {
                     console.log(`Sending to channel: ${msg.channel.id}`)
-                    msg.channel.send(element);
+                    msg.channel.send(embed);
                 });
             }).catch(data => {
                 msg.reply(data)
@@ -38,7 +38,11 @@ client.on("message", msg => {
             console.log("delete");
             break;
         case "alert":
-            console.log("alert");
+            data_service.alert(args).then(embeds => {
+                msg.channel.send(embeds);
+            }).catch(data => {
+                msg.reply(data);
+            })
             break;
         case "test":
             data_service.test();
