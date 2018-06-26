@@ -209,6 +209,10 @@ function getCoinImageURL(id) {
     return url;
 }
 
+function getGraphURL(id){
+    return `https://s2.coinmarketcap.com/generated/sparklines/web/7d/usd/${id}.png`
+}
+
 /*************************************************
  *                 UPDATE FUNCTIONS              *
  *************************************************/
