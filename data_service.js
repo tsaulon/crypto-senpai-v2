@@ -26,20 +26,14 @@ function getLocalTicker(symbol) {
     return new Promise((resolve, reject) => {
 
         var found = false;
-        var coin;
+        var coin =  coins.find(token => {
+                        if (token.symbol.toLowerCase() == symbol) {                            
+                            found = true;
+                            return token;
+                        }
+                    })
 
-        coins.filter(token => {
-            if (token.symbol.toLowerCase() == symbol) {
-                coin = token;
-                found = true;
-            }
-        })
-
-        if (!found) {
-            reject(symbol);
-        } else {
-            resolve(coin);
-        }
+        found ? resolve(coin) : reject(symbol);
     });
 }
 
@@ -82,16 +76,16 @@ module.exports.alert = events => {
     return new Promise((resolve, reject) => {
 
         var alertList = events.map(event => {
-            
+
             var alert = {
                 coin: event.split("@").shift(),
                 price: event.split("@").pop()
             }
 
-            return isCoin(alert.coin).then((coinObj) => {
-                if(isNaN(alert.price)){
+            return getLocalTicker(alert.coin).then((coinObj) => {
+                if (isNaN(alert.price)) {
                     reject(`price point requested for '${event}' must be a number.`);
-                } else{
+                } else {
 
                     var tmp = {
                         coin: coinObj,
@@ -116,24 +110,7 @@ module.exports.alert = events => {
     });
 }
 
-function isCoin(symbol){
-    
-    return new Promise((resolve, reject) => {
-        var flag = false;
-        var coinObj;
-
-        coins.forEach(x => {
-            if(x.symbol.toLowerCase() === symbol.toLowerCase()){
-                coinObj = x;
-                flag = true;
-            }
-        })
-
-        return flag ? resolve(coinObj) : reject();
-    })
-}
-
-function toDiscordAlertConfirmation(alertList){
+function toDiscordAlertConfirmation(alertList) {
 
     var embed = new Discord.RichEmbed();
 
